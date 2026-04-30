@@ -1,0 +1,256 @@
+version: "3.9"
+
+networks:
+  pcdoma-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
+
+services:
+  # ── Infrastructure ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: pcdoma-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pcdoma}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: pcdoma
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    networks:
+      - pcdoma-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pcdoma}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    container_name: pcdoma-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-pcdoma}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-secret}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - pcdoma-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: pcdoma-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-secret}
+    volumes:
+      - redis_data:/data
+    networks:
+      - pcdoma-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-secret}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Migrations ─────────────────────────────────────────────────
+  migrate-auth:
+    image: migrate/migrate:v4.17.0
+    container_name: pcdoma-migrate-auth
+    command: ["-path", "/migrations", "-database", "postgres://${POSTGRES_USER:-pcdoma}:${POSTGRES_PASSWORD:-secret}@postgres:5432/pcrentalauth?sslmode=disable", "up"]
+    volumes:
+      - ./auth-service/migrations:/migrations
+    networks:
+      - pcdoma-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  migrate-booking:
+    image: migrate/migrate:v4.17.0
+    container_name: pcdoma-migrate-booking
+    command: ["-path", "/migrations", "-database", "postgres://${POSTGRES_USER:-pcdoma}:${POSTGRES_PASSWORD:-secret}@postgres:5432/pcrentalbooking?sslmode=disable", "up"]
+    volumes:
+      - ./booking-service/migrations:/migrations
+    networks:
+      - pcdoma-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  migrate-payment:
+    image: migrate/migrate:v4.17.0
+    container_name: pcdoma-migrate-payment
+    command: ["-path", "/migrations", "-database", "postgres://${POSTGRES_USER:-pcdoma}:${POSTGRES_PASSWORD:-secret}@postgres:5432/pcrentalpayment?sslmode=disable", "up"]
+    volumes:
+      - ./payment-service/migrations:/migrations
+    networks:
+      - pcdoma-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  # ── Backend Services ───────────────────────────────────────────
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: pcdoma-auth
+    env_file: .env
+    environment:
+      PORT: 8081
+      DB_DSN: postgres://${POSTGRES_USER:-pcdoma}:${POSTGRES_PASSWORD:-secret}@postgres:5432/pcrentalauth?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-secret}@redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 168h
+    ports:
+      - "9081:8081"
+    networks:
+      - pcdoma-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate-auth:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  catalog-service:
+    build:
+      context: ./catalog-service
+      dockerfile: Dockerfile
+    container_name: pcdoma-catalog
+    env_file: .env
+    environment:
+      PORT: 8082
+      MONGO_URI: mongodb://${MONGO_USER:-pcdoma}:${MONGO_PASSWORD:-secret}@mongo:27017/pcrentalcatalog?authSource=admin
+      REDIS_URL: redis://:${REDIS_PASSWORD:-secret}@redis:6379/1
+      CACHE_TTL: 300
+    ports:
+      - "9082:8082"
+    networks:
+      - pcdoma-net
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  booking-service:
+    build:
+      context: ./booking-service
+      dockerfile: Dockerfile
+    container_name: pcdoma-booking
+    env_file: .env
+    environment:
+      PORT: 8083
+      DB_DSN: postgres://${POSTGRES_USER:-pcdoma}:${POSTGRES_PASSWORD:-secret}@postgres:5432/pcrentalbooking?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-secret}@redis:6379/2
+      CATALOG_SERVICE_URL: http://catalog-service:8082
+      PAYMENT_SERVICE_URL: http://payment-service:8084
+    ports:
+      - "9083:8083"
+    networks:
+      - pcdoma-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate-booking:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
+    container_name: pcdoma-payment
+    env_file: .env
+    environment:
+      PORT: 8084
+      DB_DSN: postgres://${POSTGRES_USER:-pcdoma}:${POSTGRES_PASSWORD:-secret}@postgres:5432/pcrentalpayment?sslmode=disable
+    ports:
+      - "9084:8084"
+    networks:
+      - pcdoma-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate-payment:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: pcdoma-notification
+    env_file: .env
+    environment:
+      PORT: 8085
+      MONGO_URI: mongodb://${MONGO_USER:-pcdoma}:${MONGO_PASSWORD:-secret}@mongo:27017/pcrentalnotifications?authSource=admin
+      REDIS_URL: redis://:${REDIS_PASSWORD:-secret}@redis:6379/3
+    networks:
+      - pcdoma-net
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: pcdoma-gateway
+    env_file: .env
+    environment:
+      PORT: 8080
+      AUTH_SERVICE_URL: http://auth-service:8081
+      CATALOG_SERVICE_URL: http://catalog-service:8082
+      BOOKING_SERVICE_URL: http://booking-service:8083
+      PAYMENT_SERVICE_URL: http://payment-service:8084
+      NOTIFICATION_SERVICE_URL: http://notification-service:8085
+      REDIS_URL: redis://:${REDIS_PASSWORD:-secret}@redis:6379/4
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+    ports:
+      - "8090:8080"
+    networks:
+      - pcdoma-net
+    depends_on:
+      - auth-service
+      - catalog-service
+      - booking-service
+      - payment-service
+      - notification-service
+    restart: unless-stopped
+
+  # ── Frontend ───────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8090/api/v1
+    container_name: pcdoma-frontend
+    ports:
+      - "3000:80"
+    networks:
+      - pcdoma-net
+    depends_on:
+      - gateway
+    restart: unless-stopped

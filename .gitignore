@@ -1,0 +1,25 @@
+# Env
+.env
+*.local
+
+# Go
+*.exe
+*.test
+*.out
+bin/
+vendor/
+
+# Node / frontend
+node_modules/
+dist/
+dist-ssr/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
