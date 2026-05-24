@@ -99,6 +99,13 @@ export function SetupDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main content */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Cover image */}
+          {setup.images?.[0] && (
+            <div className="h-64 w-full overflow-hidden rounded-2xl border border-gray-100 bg-gray-100">
+              <img src={setup.images[0]} alt={setup.name} className="h-full w-full object-cover" />
+            </div>
+          )}
+
           {/* Header */}
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <div className="flex items-start justify-between gap-4 mb-4">

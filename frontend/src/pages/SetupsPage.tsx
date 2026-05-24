@@ -31,8 +31,12 @@ function SetupCard({ setup }: { setup: Setup }) {
       to={`/setups/${setup.id}`}
       className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group"
     >
-      <div className="h-40 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center relative">
-        <span className="text-5xl">🖥</span>
+      <div className="h-40 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center relative overflow-hidden">
+        {setup.images?.[0] ? (
+          <img src={setup.images[0]} alt={setup.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+        ) : (
+          <span className="text-5xl">🖥</span>
+        )}
         {discounted && (
           <span className="absolute top-3 right-3 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full">
             -{setup.discount_percent}%

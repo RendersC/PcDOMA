@@ -3,6 +3,7 @@ import { Monitor, Zap, Shield, MapPin, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { catalogApi } from '../api/catalog';
 import type { PC } from '../types';
+import { Hero } from '../components/home/Hero';
 
 function PCCard({ pc }: { pc: PC }) {
   return (
@@ -45,29 +46,7 @@ export function HomePage() {
   return (
     <div>
       {/* Hero */}
-      <section className="bg-gradient-to-br from-gray-900 via-primary-900 to-gray-900 text-white py-20">
-        <div className="max-w-5xl mx-auto px-4 text-center">
-          <div className="inline-flex items-center gap-2 bg-primary-600/20 border border-primary-500/30 rounded-full px-4 py-1.5 mb-6">
-            <MapPin className="w-3.5 h-3.5 text-primary-400" />
-            <span className="text-xs text-primary-300">Астана, Казахстан</span>
-          </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold mb-5 leading-tight">
-            Арендуй мощный ПК <br />
-            <span className="text-primary-400">прямо у тебя дома</span>
-          </h1>
-          <p className="text-gray-300 text-lg mb-8 max-w-xl mx-auto">
-            Выбери конфигурацию, добавь нужную периферию — и работник доставит всё к тебе. Без лишних хлопот.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link to="/catalog" className="bg-primary-600 hover:bg-primary-700 text-white px-8 py-3.5 rounded-xl font-semibold transition-colors flex items-center gap-2 justify-center">
-              Смотреть ПК <ChevronRight className="w-4 h-4" />
-            </Link>
-            <Link to="/setups" className="bg-white/10 hover:bg-white/20 text-white px-8 py-3.5 rounded-xl font-semibold transition-colors border border-white/20">
-              Готовые сеапы
-            </Link>
-          </div>
-        </div>
-      </section>
+      <Hero />
 
       {/* Features */}
       <section className="py-16 bg-gray-50">

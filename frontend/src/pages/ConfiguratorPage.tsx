@@ -142,12 +142,15 @@ export function ConfiguratorPage() {
                         <button
                           key={p.id}
                           onClick={() => togglePeripheral(p)}
-                          className={`text-left p-3 rounded-xl border transition-all flex items-center justify-between ${
+                          className={`text-left p-3 rounded-xl border transition-all flex items-center gap-3 ${
                             isSelected ? 'border-primary-400 bg-primary-50' : 'border-gray-100 hover:border-gray-200'
                           }`}
                         >
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{p.name}</p>
+                          {p.images?.[0] && (
+                            <img src={p.images[0]} alt={p.name} className="w-12 h-12 rounded-lg object-cover flex-shrink-0 bg-gray-100" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
                             <p className="text-xs text-gray-500 mt-0.5">+{p.price_per_hour.toLocaleString()} ₸/ч</p>
                           </div>
                           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
